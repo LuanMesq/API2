@@ -1,141 +1,115 @@
 package api2
 
- /*
- Versão I. Para facilitar processos e validações no banco de dados Oracle,
- Foi criada a PACK_DESAFIO_DEV, no owner "ALUNO9", responsável pelas validações
- dos registros de reajustes de salários e retornando o "p_retorno in out" a resposta do banco.
- */
-
-import org.springframework.jdbc.datasource.DataSourceUtils
-import java.sql.CallableStatement
-import java.sql.ResultSet
+import grails.gorm.transactions.Transactional
+import org.springframework.dao.DataIntegrityViolationException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import static java.time.LocalDate.parse
 
+
+@Transactional
 class ReajusteSalarioService {
 
-    private static LocalDate parseDataNascimento(String dataReajuste) {
+    // Formata a data de entrada dd/mm/yyyy.
+    private static LocalDate parseDataReajuste(String dataReajuste) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
         return parse(dataReajuste, dateFormatter)
     }
 
     def listaReajuste() {
-        ReajusteSalario.list()
+        def reajusteList = ReajusteSalario.list()
+
+        def reajusteDados = reajusteList.collect { reajusteSalario ->
+            [
+                    id: reajusteSalario.id,
+                    valorSalario: reajusteSalario.valorSalario,
+                    dataReajuste: reajusteSalario.dataReajuste.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                    funcionario: [
+                            id: reajusteSalario.funcionario ? reajusteSalario.funcionario.id : null,
+                            nome: reajusteSalario.funcionario ? reajusteSalario.funcionario.nome : null
+                    ]
+            ]
+        }
+
+        if (reajusteList){
+            return reajusteDados
+        } else{
+            return "ERRO"
+        }
     }
 
     def buscaReajuste(Long id) {
-        ReajusteSalario.get(id)
+        def reajusteId = ReajusteSalario.get(id)
+
+        def reajusteDados = reajusteId.collect { reajusteSalario ->
+            [
+                    id: reajusteSalario.id,
+                    valorSalario: reajusteSalario.valorSalario,
+                    dataReajuste: reajusteSalario.dataReajuste.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                    funcionario: [
+                            id: reajusteSalario.funcionario ? reajusteSalario.funcionario.id : null,
+                            nome: reajusteSalario.funcionario ? reajusteSalario.funcionario.nome : null
+                    ]
+            ]
+        }
+
+        if (reajusteId){
+            return reajusteDados
+        } else{
+            return "ERRO"
+        }
     }
 
-    def dataSource
-
     def criaRegReajuste(Map reajusteData) {
-        def conn = DataSourceUtils.getConnection(dataSource)
-        CallableStatement callStmt = null
+        Map retorno = [success: true]
 
-        try {
-            callStmt = conn.prepareCall("{call PACK_DESAFIO_DEV.PROC_INCLUI_REAJUSTE(?, ?, ?, ?, ?)}")
+        def reajuste = new ReajusteSalario(
+                valorSalario: reajusteData.valorSalario,
+                dataReajuste: parseDataReajuste(reajusteData.dataReajuste),
+                funcionario: reajusteData.funcionario
+        )
 
-            def seq_id_reajuste
-            def CampoObrigatorio
-
-            if (reajusteData.funcionario == null){
-                CampoObrigatorio = 'Obrigatório Informar o ID do funcionário.'
-                return CampoObrigatorio
-            }
-            if (reajusteData.valorSalario == null){
-                CampoObrigatorio = 'Obrigatório Informar o Valor do Reajuste Salarial.'
-                return CampoObrigatorio
-            }
-            if (reajusteData.dataReajuste == null){
-                CampoObrigatorio = 'Obrigatório Informar a Data do do Reajuste Salarial.'
-                return CampoObrigatorio
-            }
-
-            def sequenceQuery = "SELECT seq_id_reajuste.nextval FROM DUAL"
-            ResultSet sequenceResult = conn.createStatement().executeQuery(sequenceQuery)
-            if (sequenceResult.next()) {
-                seq_id_reajuste = sequenceResult.getLong(1)
-                sequenceResult.close()
-            } else {
-                log.error("Não foi possível obter o valor da sequência.")
-            }
-            log.error("seq_id_reajuste: ${seq_id_reajuste}")
-            callStmt.setLong(1, seq_id_reajuste)
-            callStmt.setLong(2, reajusteData.funcionario)
-            callStmt.setDate(3, java.sql.Date.valueOf(LocalDate.parse(reajusteData.dataReajuste, DateTimeFormatter.ofPattern("dd/MM/yyyy"))))
-            callStmt.setBigDecimal(4, reajusteData.valorSalario)
-            callStmt.registerOutParameter(5, java.sql.Types.VARCHAR)
-
-            callStmt.execute()
-
-            def returnValue = callStmt.getString(5)
-            log.error("Retorno da procedure: ${returnValue}")
-            return returnValue
-            return
-        } catch (Exception e) {
-            log.error("Erro ao criar registro de Reajuste Salarial:", e)
+        if (!reajuste.validate()) {
+            retorno.success = false
             return "ERRO"
-        } finally {
-            if (callStmt) {
-                callStmt.close()
-            }
-            DataSourceUtils.releaseConnection(conn, dataSource)
         }
+
+        reajuste.save(flush: true)
+        return retorno
     }
 
     def atzReajuste(Long id, Map reajusteData) {
+        Map retorno = [success: true]
 
-        def conn = DataSourceUtils.getConnection(dataSource)
-        CallableStatement callStmt = null
+        ReajusteSalario reajuste = ReajusteSalario.get(id as Long)
+        reajusteData.dataReajuste = parseDataReajuste(reajusteData.dataReajuste)
+        reajuste.properties = reajusteData
 
-        try {
-            callStmt = conn.prepareCall("{call PACK_DESAFIO_DEV.PROC_ATZ_REAJUSTE(?, ?, ?, ?, ?)}")
-            callStmt.setLong(1, id)
-            callStmt.setLong(2, reajusteData.funcionario)
-            callStmt.setDate(3, java.sql.Date.valueOf(LocalDate.parse(reajusteData.dataReajuste, DateTimeFormatter.ofPattern("dd/MM/yyyy"))))
-            callStmt.setBigDecimal(4, reajusteData.valorSalario)
-            callStmt.registerOutParameter(5, java.sql.Types.VARCHAR)
-
-            callStmt.execute()
-
-            def returnValue = callStmt.getString(5)
-            log.error("Retorno da procedure: ${returnValue}")
-            return returnValue
-            return
-        } catch (Exception e) {
-            log.error("Erro ao alterar registro de Reajuste Salarial:", e)
+        if (!reajuste.validate()) {
+            retorno.success = false
             return "ERRO"
-        } finally {
-            if (callStmt) {
-                callStmt.close()
-            }
-            DataSourceUtils.releaseConnection(conn, dataSource)
         }
+
+        reajuste.save(flush: true)
+        return retorno
     }
 
     def excluir(Long id) {
-        def conn = DataSourceUtils.getConnection(dataSource)
-        CallableStatement callStmt = null
+        Map retorno = [success: true]
+
+        def reajuste = ReajusteSalario.get(id as Long)
 
         try {
-            callStmt = conn.prepareCall("{call PACK_DESAFIO_DEV.PROC_DELETA_REAJUSTE(?, ?)}")
-            callStmt.setLong(1, id)
-            callStmt.registerOutParameter(2, java.sql.Types.VARCHAR)
-
-            callStmt.execute()
-
-            def returnValue = callStmt.getString(2)
-            log.error("Retorno da procedure: ${returnValue}")
-            return returnValue
-        } catch (Exception e) {
-            log.error("Erro ao deletar registro de Reajuste Salarial:", e)
-            return "ERRO"
-        } finally {
-            if (callStmt) {
-                callStmt.close()
+            if (reajuste) {
+                reajuste.delete(flush: true)
+                retorno.success = true
+                return retorno
+            } else {
+                return "ERRO"
             }
-            DataSourceUtils.releaseConnection(conn, dataSource)
+        }catch (DataIntegrityViolationException e) {
+            return "ERRO FK"
         }
     }
+
 }

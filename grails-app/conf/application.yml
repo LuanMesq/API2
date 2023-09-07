@@ -107,6 +107,7 @@ environments:
             username: 'aluno9'
             password: 'aluno9'
             driverClassName: oracle.jdbc.OracleDriver
+            logSql: true
             autocommit: true
     test:
         dataSource:

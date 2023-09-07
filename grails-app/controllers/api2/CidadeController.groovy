@@ -1,5 +1,4 @@
 package api2
-/* ---------------------------------- Versão I ---------------------------------- */
 
 import grails.converters.JSON
 import grails.gorm.transactions.Transactional
@@ -7,9 +6,11 @@ import grails.gorm.transactions.Transactional
 @Transactional
 class CidadeController {
 
+    static responseFormats = ["json"]
+    static defaultAction = "get"
+
     def CidadeService
 
-    /* ---------------------------------- INDEX ---------------------------------- */
     def list() {
         if (!request.method.equals("GET")) {
             render(contentType: 'application/json') {
@@ -17,29 +18,19 @@ class CidadeController {
             }
             return
         }
-        def cidades = CidadeService.listaCidade()
         def mensagemErro
-        if (cidades) {
-            def cidadesComDadosBasicos = cidades.collect { cidade ->
-                [
-                        id: cidade.id,
-                        nome: cidade.nome
-                ]
-            }
-            mensagemErro = null
-            render cidadesComDadosBasicos as JSON
-        } else {
+        def retorno = cidadeService.listaCidade()
+
+        if (retorno == "ERRO"){
             mensagemErro = "Lista de cidade(s) não encontradas(s)."
-        }
-        if (mensagemErro) {
-            render(status: 500, contentType: 'application/json') {
-                JSON(error: mensagemErro)
+            render(contentType: 'application/json') {
+                JSON(message: mensagemErro)
             }
         } else {
-            return
+            respond(retorno)
         }
     }
-    /*  ---------------------------------- SHOW ---------------------------------- */
+
     def get(Long id) {
         if (!request.method.equals("GET")) {
             render(contentType: 'application/json') {
@@ -47,51 +38,32 @@ class CidadeController {
             }
             return
         }
-        def cidade = CidadeService.buscaCidade(id)
         def mensagemErro
+        def retorno = cidadeService.buscaCidade(id)
 
-        if (cidade) {
-            def cidadeSimplificada = [
-                      id: cidade.id,
-                      nome: cidade.nome
-            ]
-            mensagemErro = null
-            render cidadeSimplificada as JSON
-        } else {
-            mensagemErro = "Cidade(s) não encontradas(s)."
-        }
-        if (mensagemErro) {
-            render(status: 500, contentType: 'application/json') {
-                JSON(error: mensagemErro)
+        if (retorno == "ERRO"){
+            mensagemErro = "Cidade de ID ${id} não encontrada."
+            render(contentType: 'application/json') {
+                JSON(message: mensagemErro)
             }
         } else {
-            return
+            respond(retorno)
         }
     }
-    /* ---------------------------------- SAVE ---------------------------------- */
-    def save() {
 
+    def save() {
         if (!request.method.equals("POST")) {
             render(contentType: 'application/json') {
                 JSON(message: "Método não permitido para esta ação.")
             }
             return
         }
-
         def cidadeData = request.JSON
-        def cidadeIncluida = cidadeService.criaRegCidade(cidadeData)
-        if (cidadeIncluida == 'ERRO') {
-            render(contentType: 'application/json') {
-                JSON(message: "Erro ao Criar o Cidade. Por favor, verifique o formato dos registros de entrada.")
-            }
-        }else{
-            render(contentType: 'application/json') {
-                JSON(message: "Atualização de Dados Processada com Sucesso. Retorno: $cidadeIncluida}")
-                cidadeData
-            }
-        }
+        def retorno = cidadeService.criaRegCidade(cidadeData)
+        respond(retorno)
     }
-    /* ---------------------------------- UPDATE ---------------------------------- */
+
+
     def update(Long id) {
         if (!request.method.equals("PUT")) {
             render(contentType: 'application/json') {
@@ -100,37 +72,33 @@ class CidadeController {
             return
         }
         def cidadeData = request.JSON
-        def cidadeAtualizada = cidadeService.atzCidade(id, cidadeData)
-        if (cidadeAtualizada == 'ERRO') {
-            render(contentType: 'application/json') {
-                JSON(message: "Erro ao Atualizar Cidade. Por favor, verifique o formato dos registros de entrada.")
-            }
-        }else{
-            render(contentType: 'application/json') {
-                JSON(message: "Atualização de Dados Processada com Sucesso. Retorno: ${cidadeAtualizada}")
-                cidadeData
-            }
-        }
+        def retorno = cidadeService.atzCidade(id, cidadeData)
+        respond(retorno)
     }
-    /*  ---------------------------------- DELETE ---------------------------------- */
+
     def delete(Long id) {
-        if (!request.method.equals("DELETE")){
+        if (!request.method.equals("DELETE")) {
             render(contentType: 'application/json') {
                 JSON(message: "Método não permitido para esta ação.")
             }
             return
         }
-        def cidadeData = request.JSON
-        def cidadeExcluida = cidadeService.excluir(id)
-        if (cidadeExcluida == 'ERRO') {
+        def retorno = cidadeService.excluir(id)
+        def mensagemErro
+
+        if (retorno == "ERRO"){
+            mensagemErro = "Cidade de ID ${id} não encontrada."
             render(contentType: 'application/json') {
-                JSON(message: "Erro ao Deletar o Funcionario. Por favor, verifique o formato dos registros de entrada.")
+                JSON(message: mensagemErro)
             }
-        }else{
+        }else if(retorno == 'ERRO FK'){
+            mensagemErro = "Registro Filho Localizado."
             render(contentType: 'application/json') {
-                JSON(message: "Delete de Dados Processado com Sucesso. Retorno: ${cidadeExcluida} ")
-                cidadeData
+                JSON(message: mensagemErro)
             }
+        }else {
+            respond(retorno)
         }
     }
+
 }

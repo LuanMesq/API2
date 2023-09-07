@@ -1,9 +1,12 @@
 package api2
 
 class FuncionarioController {
-    def FuncionarioService
 
-    /* ---------------------------------- INDEX ---------------------------------- */
+    static responseFormats = ["json"]
+    static defaultAction = "get"
+
+    def funcionarioService
+
     def list() {
         if (!request.method.equals("GET")){
             render(contentType: 'application/json') {
@@ -11,35 +14,21 @@ class FuncionarioController {
             }
             return
         }
-        def funcionarios = FuncionarioService.listaFuncionario()
+
         def mensagemErro
-        if (funcionarios) {
-            def funcionariosBasicos = funcionarios.collect { funcionario ->
-                [
-                        id: funcionario.id,
-                        nome: funcionario.nome,
-                        cidade: [
-                                id: funcionario.cidade ? funcionario.cidade.id : null,
-                                nome: funcionario.cidade ? funcionario.cidade.nome : null
-                        ]
-                ]
-            }
-            mensagemErro = null
-            render(status: 200, contentType: 'application/json') {
-                JSON(Retorno: funcionariosBasicos)
+        def retorno = funcionarioService.listaFuncionario()
+
+        if (retorno == "ERRO"){
+            mensagemErro = "Lista de funcionario(s) não encontrada."
+            render(contentType: 'application/json') {
+                JSON(message: mensagemErro)
             }
         } else {
-            mensagemErro = "Lista de funcionários não encontrada(s)."
+            respond(retorno)
         }
-        if (mensagemErro) {
-            render(status: 500, contentType: 'application/json') {
-                JSON(error: mensagemErro)
-            }
-        } else {
-            return
-        }
+
     }
-    /*  ---------------------------------- SHOW ---------------------------------- */
+
     def get(Long id) {
         if (!request.method.equals("GET")) {
             render(contentType: 'application/json') {
@@ -47,33 +36,20 @@ class FuncionarioController {
             }
             return
         }
-        def funcionario = FuncionarioService.buscaFuncionario(id)
+
         def mensagemErro
-        if (funcionario) {
-            def funcionarioSimplificado = [
-                    id: funcionario.id,
-                    nome: funcionario.nome,
-                    cidade: [
-                            id: funcionario.cidade ? funcionario.cidade.id : null,
-                            nome: funcionario.cidade ? funcionario.cidade.nome : null
-                    ]
-            ]
-            mensagemErro = null
-            render(status: 200, contentType: 'application/json') {
-                JSON(Retorno: funcionarioSimplificado)
+        def retorno = funcionarioService.buscaFuncionario(id)
+
+        if (retorno == "ERRO"){
+            mensagemErro = "Funcionario de ID ${id} não encontrado."
+            render(contentType: 'application/json') {
+                JSON(message: mensagemErro)
             }
         } else {
-            mensagemErro = "Funcionário(s) não encontrados(s)."
-        }
-        if (mensagemErro) {
-            render(status: 500, contentType: 'application/json') {
-                JSON(error: mensagemErro)
-            }
-        } else {
-            return
+            respond(retorno)
         }
     }
-    /* ---------------------------------- SAVE ---------------------------------- */
+
     def save() {
         if (!request.method.equals("POST")) {
             render(contentType: 'application/json') {
@@ -83,19 +59,19 @@ class FuncionarioController {
         }
 
         def funcionarioData = request.JSON
-        def funcionarioIncluido = funcionarioService.criaRegFuncionario(funcionarioData)
-        if (funcionarioIncluido == 'ERRO') {
+        def retorno = funcionarioService.criaRegFuncionario(funcionarioData)
+        def mensagemErro
+
+        if (retorno == "ERRO"){
+            mensagemErro = "Ocorreu um erro ao inserir o funcionário. Contate o ADM."
             render(contentType: 'application/json') {
-                JSON(message: "Erro ao Criar o Funcionario. Por favor, verifique o formato dos registros de entrada.")
+                JSON(message: mensagemErro)
             }
-        }else{
-            render(contentType: 'application/json') {
-                JSON(message: "Processamento Concluído com Sucesso. Retorno: $funcionarioIncluido}")
-                funcionarioData
-            }
+        } else {
+            respond(retorno)
         }
     }
-    /* ---------------------------------- UPDATE ---------------------------------- */
+
     def update(Long id) {
         if (!request.method.equals("PUT")) {
             render(contentType: 'application/json') {
@@ -103,20 +79,21 @@ class FuncionarioController {
             }
             return
         }
+
         def funcionarioData = request.JSON
-        def funcionarioAtualizado = funcionarioService.atzFuncionario(id, funcionarioData)
-        if (funcionarioAtualizado == 'ERRO') {
+        def retorno = funcionarioService.atzFuncionario(id, funcionarioData)
+        def mensagemErro
+
+        if (retorno == "ERRO"){
+            mensagemErro = "Ocorreu um erro ao atualizar o funcionário. Contate o ADM."
             render(contentType: 'application/json') {
-                JSON(message: "Erro ao Atualizar o Funcionario. Por favor, verifique o formato dos registros de entrada.")
+                JSON(message: mensagemErro)
             }
-        }else{
-            render(contentType: 'application/json') {
-                JSON(message: "Processamento Concluído com Sucesso.. Retorno: ${funcionarioAtualizado}")
-                funcionarioAtualizado
-            }
+        } else {
+            respond(retorno)
         }
     }
-    /*  ---------------------------------- DELETE ---------------------------------- */
+
     def delete(Long id) {
         if (!request.method.equals("DELETE")) {
             render(contentType: 'application/json') {
@@ -124,17 +101,22 @@ class FuncionarioController {
             }
             return
         }
-        def funcionarioData = request.JSON
-        def funcionarioExcluido = funcionarioService.excluir(id)
-        if (funcionarioExcluido == 'ERRO') {
+        def retorno = funcionarioService.excluir(id)
+        def mensagemErro
+
+        if (retorno == "ERRO"){
+            mensagemErro = "Funcionário de ID ${id} não encontrado."
             render(contentType: 'application/json') {
-                JSON(message: "Erro ao Deletar o Funcionario. Por favor, verifique o formato dos registros de entrada.")
+                JSON(message: mensagemErro)
             }
-        }else{
+        } else if(retorno == 'ERRO FK') {
+            mensagemErro = "Registro Filho Localizado."
             render(contentType: 'application/json') {
-                JSON(message: "Processamento Concluído com Sucesso.. Retorno: ${funcionarioExcluido} ")
-                funcionarioData
+                JSON(message: mensagemErro)
             }
+        } else {
+            respond(retorno)
         }
     }
+
 }
