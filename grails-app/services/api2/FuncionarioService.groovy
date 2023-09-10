@@ -52,8 +52,8 @@ class FuncionarioService {
         Map retorno = [success: true]
 
         def funcionario = new Funcionario(
-            nome: funcionarioData.nome,
-            cidade: funcionarioData.cidade
+                nome: funcionarioData.nome,
+                cidade: funcionarioData.cidade
         )
 
         if (!funcionario.validate()) {
@@ -69,15 +69,25 @@ class FuncionarioService {
         Map retorno = [success: true]
 
         Funcionario funcionario = Funcionario.get(id as Long)
-        funcionario.properties = funcionarioData
 
-        if (!funcionario.validate()) {
+        try {
+            if (!funcionario.validate()) {
+                retorno.success = false
+                return "ERRO"
+            }
+
+            if (funcionario) {
+                funcionario.properties = funcionarioData
+                funcionario.save(flush: true)
+                return retorno
+            } else {
+                retorno.success = false
+                return "ERRO"
+            }
+        }catch(Exception e){
             retorno.success = false
             return "ERRO"
         }
-
-        funcionario.save(flush: true)
-        return retorno
     }
 
     def excluir(Long id) {
